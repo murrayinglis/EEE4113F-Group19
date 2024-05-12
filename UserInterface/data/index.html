@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+ <meta charset="UTF-8">
+ <meta name="viewport" content="width=device-width, initial-scale=1.0">
+ <title>Hornbill Temperature Dashboard</title>
+ <style>
+  /* CSS styles */
+  body {
+    margin: 0;
+    padding: 0;
+  }
+
+  .topnav {
+   overflow: hidden;
+   background-color: #0A1128;
+   position: fixed;
+   top: 0;
+   width: 100%;
+   z-index: 1000;
+  }
+
+  .topnav h1 {
+   font-size: 1.8rem;
+   color: white;
+   margin: 0;
+   padding: 15px;
+  }
+
+  .welcome-panel {
+   background-color: #f4f4f4;
+   border-radius: 10px;
+   padding: 20px;
+   margin-top: 70px; /* Adjusted margin to create space below the topnav */
+  }
+
+  .welcome-panel h2 {
+   margin-top: 0;
+  }
+
+  .content {
+   padding: 5%;
+  }
+
+  .panel {
+   background-color: #f4f4f4;
+   border-radius: 10px;
+   padding: 20px;
+   margin-bottom: 20px;
+  }
+
+  .panel h2 {
+   margin-top: 0;
+  }
+
+  .buttons-container {
+   list-style-type: none;
+   padding: 0;
+  }
+
+  .buttons-container button {
+   background-color: white;
+   border: none;
+   border-radius: 10px; /* Rounded edges */
+   padding: 10px 20px;
+   margin-bottom: 10px;
+   cursor: pointer;
+   transition: all 0.3s ease;
+  }
+
+  .buttons-container button:hover {
+   background-color: #4CAF50; /* Green color on hover */
+   transform: scale(1.1); /* Grow in size */
+  }
+
+  .chart-grid {
+   display: flex; /* Use flexbox for layout */
+   flex-wrap: wrap; /* Allow charts to wrap to the next line */
+   justify-content: flex-start; /* Start from left */
+  }
+
+  .chart-container {
+   width: calc(33.33% - 20px); /* Each chart takes 1/3 of the available width initially */
+   height: 400px; /* Fixed height */
+   margin-right: 20px; /* Add margin between charts */
+   margin-bottom: 20px; /* Add margin below charts */
+  }
+
+  .chart-container:last-child {
+   margin-right: 0; /* Remove margin from the last chart */
+  }
+
+  /* Style for combobox */
+  .combobox {
+    display: inline-block;
+    margin-right: 20px;
+  }
+
+  .combobox select {
+    padding: 8px 16px;
+    font-size: 16px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    background-color: white;
+    cursor: pointer;
+  }
+
+  /* Style for retrieve data button */
+  .retrieve-data-button {
+    background-color: white;
+    border: none;
+    border-radius: 10px;
+    padding: 10px 20px;
+    margin-bottom: 10px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+  }
+
+  .retrieve-data-button:hover {
+    background-color: #4CAF50;
+    transform: scale(1.1);
+  }
+ </style>
+ <script src="https://code.highcharts.com/highcharts.js"></script>
+</head>
+<body>
+ <div class="topnav">
+  <h1>Hornbill Monitoring Dashboard</h1>
+ </div>
+
+ <div class="welcome-panel">
+  <h2>Welcome</h2>
+  <p>Welcome to the Hornbill Temperature Dashboard. This dashboard provides access to temperature data from multiple sensors. You can view temperature trends, set alerts, and download temperature data for analysis.</p>
+ </div>
+
+ <div class="content">
+  <div class="panel">
+   <h2>Retrieve Data</h2>
+   <button id="retrieveDataButton" class="retrieve-data-button">Download temperature data</button>
+  </div>
+  <div class="panel">
+   <h2>Temperature Alerts</h2>
+   <div class="combobox">
+     <select id="alertDuration">
+       <option value="12">12 hours</option>
+       <option value="24">24 hours</option>
+       <option value="48">2 days</option>
+       <option value="168">1 week</option>
+       <option value="336">2 weeks</option>
+       <option value="all">All time</option>
+     </select>
+   </div>
+  </div>
+  <div class="panel">
+   <h2>View Graphs</h2>
+   <ul id="buttons" class="buttons-container"></ul> <!-- Container for buttons -->
+   <button id="showCombinedButton" onclick="showCombinedGraph()">Show Combined</button>
+  </div>
+  <div class="chart-grid" id="charts"></div> <!-- Container for charts -->
+ </div>
+
+ <script>
+  // Function to generate random temperature between 18 and 25 degrees Celsius
+  function generateRandomTemperature() {
+    return Math.floor(Math.random() * (24 - 22 + 1)) + 18;
+  }
+
+  // Function to generate random temperature data for all sensors
+  function generateRandomTemperatureData() {
+    var data = {};
+    for (var i = 1; i <= 7; i++) {
+      var sensorKey = 'Sensor' + i;
+      data[sensorKey] = generateRandomTemperature();
+    }
+    return data;
+  }
+
+  // Function to generate timestamp categories
+  function generateTimestamps() {
+    var timestamps = [];
+    var currentTime = new Date().getTime();
+    for (var i = 0; i < 7; i++) {
+      timestamps.push(currentTime + i * 60000); // Assuming one second intervals
+    }
+    return timestamps;
+  }
+
+  // Function to format timestamp to local string
+  function formatTimestamp(timestamp) {
+    return new Date(timestamp).toLocaleString();
+  }
+
+  // Function to create buttons and charts dynamically
+  function createButtonsAndCharts() {
+    var buttonsContainer = document.getElementById('buttons');
+    var chartsContainer = document.getElementById('charts');
+
+    var { graphData, categories } = getIndividualGraphData(); // Get data and categories for individual graphs
+
+    for (var i = 1; i <= 7; i++) {
+      var button = document.createElement('button');
+      button.textContent = 'Show Graph ' + i;
+      button.dataset.graphId = i;
+      button.addEventListener('click', showGraph);
+      buttonsContainer.appendChild(button);
+
+      var chartDiv = document.createElement('div');
+      chartDiv.id = 'chart' + i;
+      chartDiv.className = 'chart-container';
+      chartDiv.style.display = 'none';
+      chartsContainer.appendChild(chartDiv);
+
+      createChart('chart' + i, graphData[i - 1], categories); // Pass data and categories to createChart
+    }
+  }
+
+  // Function to get data and categories for each individual graph
+  function getIndividualGraphData() {
+    var graphData = [];
+    var categories = generateTimestamps(); // Generate timestamps for each individual graph
+    for (var i = 1; i <= 7; i++) {
+      var randomData = generateRandomTemperatureData();
+      graphData.push({
+        name: 'Sensor' + i,
+        data: Object.values(randomData)
+      });
+    }
+    return { graphData, categories };
+  }
+
+  // Function to create a new chart
+  function createChart(containerId, data, categories) {
+    var chart = new Highcharts.Chart({
+      chart: {
+        renderTo: containerId
+      },
+      series: [{
+        name: 'Temperature',
+        type: 'line',
+        color: '#101D42',
+        marker: {
+          symbol: 'circle',
+          radius: 3,
+          fillColor: '#101D42',
+        },  
+        data: data // Use data passed from getIndividualGraphData()
+      }],
+      title: {
+        text: 'Graph ' + containerId.slice(-1)
+      },
+      xAxis: {
+        categories: categories.map(timestamp => formatTimestamp(timestamp)),
+        labels: {
+          formatter: function() {
+            return formatTimestamp(this.value);
+          }
+        }
+      },
+      yAxis: {
+        title: {
+          text: 'Temperature Celsius Degrees'
+        }
+      },
+      credits: {
+        enabled: false
+      }
+    });
+  }
+
+  // Function to show the corresponding chart when a button is pressed
+  function showGraph(event) {
+    var graphId = event.target.dataset.graphId;
+    var chartDiv = document.getElementById('chart' + graphId);
+    chartDiv.style.display = 'block';
+  }
+
+  // Function to get combined data and categories
+  function getCombinedData() {
+    var combinedData = {};
+    var categories = [];
+
+    // Generate random data for all sensors and collect categories
+    for (var i = 1; i <= 7; i++) {
+      var randomData = generateRandomTemperatureData();
+      for (var sensor in randomData) {
+        if (!combinedData[sensor]) {
+          combinedData[sensor] = [];
+        }
+        combinedData[sensor].push(randomData[sensor]);
+      }
+      if (i === 1) {
+        categories = generateTimestamps(); // Generate timestamp categories
+      }
+    }
+
+    return { combinedData, categories };
+  }
+
+  // Function to show the combined graph
+  function showCombinedGraph() {
+    plotCombinedGraph();
+  }
+
+  // Function to plot the combined graph
+  function plotCombinedGraph() {
+    const { combinedData, categories } = getCombinedData();
+    var seriesData = [];
+    for (var sensor in combinedData) {
+      seriesData.push({
+        name: sensor,
+        data: combinedData[sensor]
+      });
+    }
+
+    var chart = new Highcharts.Chart({
+      chart: {
+        renderTo: 'charts',
+        type: 'line'
+      },
+      title: {
+        text: 'Combined Graph'
+      },
+      xAxis: {
+        categories: categories.map(timestamp => formatTimestamp(timestamp)),
+        labels: {
+          formatter: function() {
+            return formatTimestamp(this.value);
+          }
+        }
+      },
+      yAxis: {
+        title: {
+          text: 'Temperature Celsius Degrees'
+        }
+      },
+      series: seriesData,
+      credits: {
+        enabled: false
+      }
+    });
+  }
+
+  // Function to download combined data
+  function downloadCombinedData() {
+    const { combinedData, categories } = getCombinedData();
+    const csvRows = [];
+
+    // Add header row
+    csvRows.push(['Timestamp', ...Object.keys(combinedData)].join(','));
+
+    // Add data rows
+    categories.forEach((timestamp, index) => {
+      const row = [formatTimestamp(timestamp)];
+      for (const sensor in combinedData) {
+        row.push(combinedData[sensor][index]);
+      }
+      csvRows.push(row.join(','));
+    });
+
+    const csvData = csvRows.join('\n');
+    const blob = new Blob([csvData], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', 'temperature_data.csv');
+    link.style.display = 'none';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
+
+  // Call createButtonsAndCharts when the page loads
+  window.addEventListener('load', createButtonsAndCharts);
+
+  // Simulate new readings every 5 seconds (for demonstration purposes)
+  setInterval(simulateNewReadings, 5000);
+
+  // Function to simulate new readings and plot them
+  function simulateNewReadings() {
+    for (var i = 1; i <= 7; i++) {
+      var randomData = generateRandomTemperatureData();
+      var chart = Highcharts.charts[i - 1];
+      chart.series[0].setData(Object.values(randomData));
+    }
+  }
+
+  // Add event listener for download button
+  document.getElementById('retrieveDataButton').addEventListener('click', downloadCombinedData);
+ </script>
+</body>
+</html>
